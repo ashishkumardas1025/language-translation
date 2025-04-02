@@ -234,3 +234,152 @@ with tabs[0]:  # Translation Tab
                         if isinstance(value, dict):
                             st.write(f"**{key.replace('_', ' ').title()}**")
                             for sub_key, sub_value in value.items():
+                                st.write(f"- {sub_key.replace('_', ' ').title()}: {sub_value}")
+                        else:
+                            st.write(f"**{key.replace('_', ' ').title()}**: {value}")
+                except Exception as e:
+                    st.error(f"Error displaying document analysis: {str(e)}")
+            
+            # Quality review section
+            st.subheader("Translation Quality Review")
+            if quality_review:
+                try:
+                    quality_score = quality_review.get("quality_score", 0)
+                    st.markdown(f"**Overall Score:** {quality_score}/10")
+                    
+                    metrics = quality_review.get("metrics", {})
+                    if metrics:
+                        st.markdown("**Quality Metrics:**")
+                        for metric, score in metrics.items():
+                            st.write(f"- {metric.replace('_', ' ').title()}: {score}/10")
+                    
+                    notes = quality_review.get("notes", [])
+                    if notes:
+                        st.markdown("**Translation Notes:**")
+                        for note in notes:
+                            st.write(f"- {note}")
+                except Exception as e:
+                    st.error(f"Error displaying quality review: {str(e)}")
+
+with tabs[1]:  # Chat Tab
+    st.header("Chat with Your Documents")
+    
+    # Document selection for chat
+    available_documents = call_api("documents", method="GET")
+    
+    if available_documents:
+        document_options = [doc.get("filename") for doc in available_documents]
+        selected_document = st.selectbox("Select a document to chat with", 
+                                         ["None"] + document_options)
+        
+        if selected_document != "None":
+            # Find the document ID
+            doc_id = None
+            for doc in available_documents:
+                if doc.get("filename") == selected_document:
+                    doc_id = doc.get("file_id")
+                    break
+            
+            if doc_id:
+                # Display chat interface
+                st.subheader(f"Chat with {selected_document}")
+                
+                # Chat history display
+                chat_container = st.container()
+                
+                with chat_container:
+                    for message in st.session_state.chat_history:
+                        role = message.get("role", "")
+                        content = message.get("content", "")
+                        
+                        if role == "user":
+                            st.markdown(f"""
+                            <div class="chat-message user-message">
+                                <b>You:</b> {content}
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""
+                            <div class="chat-message assistant-message">
+                                <b>AI Assistant:</b> {content}
+                            </div>
+                            """, unsafe_allow_html=True)
+                
+                # Chat input
+                user_input = st.text_area("Ask a question about your document", height=100)
+                
+                col1, col2 = st.columns([3, 1])
+                with col2:
+                    send_btn = st.button("Send Message", use_container_width=True)
+                
+                if send_btn and user_input:
+                    # Add user message to chat history
+                    st.session_state.chat_history.append({
+                        "role": "user",
+                        "content": user_input
+                    })
+                    
+                    # Send the message to the API
+                    chat_data = {
+                        "file_id": doc_id,
+                        "query": user_input,
+                        "history": st.session_state.chat_history[:-1]  # Exclude the most recent message
+                    }
+                    
+                    with st.spinner("AI is responding..."):
+                        response = call_api("chat", method="POST", data=chat_data)
+                        
+                        if response:
+                            # Add AI response to chat history
+                            st.session_state.chat_history.append({
+                                "role": "assistant",
+                                "content": response.get("response", "Sorry, I couldn't generate a response.")
+                            })
+                    
+                    # Clear the input and refresh
+                    st.experimental_rerun()
+
+# Settings sidebar
+with st.sidebar:
+    st.header("Settings")
+    
+    # API settings
+    api_expander = st.expander("API Configuration")
+    with api_expander:
+        custom_api_url = st.text_input("API URL", API_URL)
+        if custom_api_url != API_URL:
+            API_URL = custom_api_url
+            st.success("API URL updated")
+    
+    # Translation settings
+    translation_expander = st.expander("Translation Settings")
+    with translation_expander:
+        quality_level = st.select_slider(
+            "Translation Quality",
+            options=["Draft", "Standard", "High", "Professional"],
+            value="Standard"
+        )
+        
+        preserve_formatting = st.checkbox("Preserve document formatting", value=True)
+        include_analysis = st.checkbox("Include document analysis", value=True)
+    
+    # About section
+    st.markdown("---")
+    st.subheader("About")
+    st.markdown("""
+    This application allows you to translate documents using Claude 3.5 Sonnet AI.
+    
+    **Features:**
+    - Upload and translate documents
+    - Chat with your documents
+    - Professional translation quality checking
+    
+    **Supported File Types:**
+    - Text files (.txt)
+    - Word documents (.docx)
+    """)
+    
+    # Version info
+    st.markdown("---")
+    st.caption("AI Document Translator v1.0")
+    st.caption("Powered by Claude 3.5 Sonnet")
