@@ -338,3 +338,105 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Quebec French translation process failed: {e}")
         exit(1)
+
+
+
+
+
+#####################################################
+
+def assess_semantic_accuracy(
+    generated_text: str,
+    reference_text: str,
+    custom_terms: Dict[str, str] = None
+) -> Dict[str, Any]:
+    """
+    Use Claude to assess semantic accuracy between generated and reference translations
+    by comparing meaning preservation, tone, and Quebec French authenticity.
+    """
+    if not generated_text or not reference_text:
+        return {"error": "Missing generated or reference text"}
+    
+    system_prompt = """You are an expert Quebec French linguistic evaluator with deep knowledge of Quebec language, 
+    culture, and linguistic nuances. Your task is to compare a machine-generated Quebec French translation with a 
+    reference human translation, evaluating how well the machine translation captures the meaning, tone, and Quebec-specific 
+    language features of the reference."""
+    
+    # Format custom terminology if provided
+    custom_terms_str = ""
+    if custom_terms:
+        custom_terms_str = "\nThe following custom banking terminology should be used in the translation:\n" + json.dumps(custom_terms, indent=2)
+    
+    # For long texts, check a sample of the beginning, middle and end
+    if len(generated_text) > 3000 or len(reference_text) > 3000:
+        # Get samples from beginning, middle and end
+        gen_samples = [
+            generated_text[:800],
+            generated_text[len(generated_text)//2-400:len(generated_text)//2+400],
+            generated_text[-800:]
+        ]
+        
+        ref_samples = [
+            reference_text[:800],
+            reference_text[len(reference_text)//2-400:len(reference_text)//2+400],
+            reference_text[-800:]
+        ]
+        
+        assessment_prompt = f"""Compare the following machine-generated Quebec French translation with the reference human translation.
+{custom_terms_str}
+
+MACHINE-GENERATED TRANSLATION (SAMPLES):
+Beginning: {gen_samples[0]}
+
+Middle: {gen_samples[1]}
+
+End: {gen_samples[2]}
+
+REFERENCE HUMAN TRANSLATION (SAMPLES):
+Beginning: {ref_samples[0]}
+
+Middle: {ref_samples[1]}
+
+End: {ref_samples[2]}
+
+Please evaluate the semantic accuracy of the machine-generated translation compared to the reference. Provide:
+
+1. Semantic Accuracy Score (1-10): How well the generated translation preserves the meaning of the reference translation
+2. Quebec French Authenticity Comparison (1-10): How the generated translation compares to the reference in terms of authentic Quebec French expressions and terminology
+3. Fluency Comparison (1-10): How natural the generated translation sounds compared to the reference
+4. Terminology Consistency Score (1-10): How consistently banking/domain terminology is used compared to the reference
+5. Key differences: Identify major semantic differences (meaning changes or losses)
+6. Missing Quebec expressions: Quebec French expressions in the reference that are missing from the generated text
+7. Strengths: What the generated translation does well compared to the reference
+8. Overall assessment: A brief 2-3 sentence summary of how the generated translation compares to the reference
+
+Respond in JSON format.
+"""
+    else:
+        assessment_prompt = f"""Compare the following machine-generated Quebec French translation with the reference human translation.
+{custom_terms_str}
+
+MACHINE-GENERATED TRANSLATION:
+{generated_text}
+
+REFERENCE HUMAN TRANSLATION:
+{reference_text}
+
+Please evaluate the semantic accuracy of the machine-generated translation compared to the reference. Provide:
+
+1. Semantic Accuracy Score (1-10): How well the generated translation preserves the meaning of the reference translation
+2. Quebec French Authenticity Comparison (1-10): How the generated translation compares to the reference in terms of authentic Quebec French expressions and terminology
+3. Fluency Comparison (1-10): How natural the generated translation sounds compared to the reference
+4. Terminology Consistency Score (1-10): How consistently banking/domain terminology is used compared to the reference
+5. Key differences: Identify major semantic differences (meaning changes or losses)
+6. Missing Quebec expressions: Quebec French expressions in the reference that are missing from the generated text
+7. Strengths: What the generated translation does well compared to the reference
+8. Overall assessment: A brief 2-3 sentence summary of how the generated translation compares to the reference
+
+Respond in JSON format.
+"""
+    
+    assessment_result = invoke_bedrock_claude(assessment_prompt, system_prompt, max_tokens=4000)
+    assessment_data = extract_json(assessment_result)
+    
+    return assessment_data
