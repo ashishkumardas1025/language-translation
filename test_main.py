@@ -440,3 +440,10 @@ Respond in JSON format.
     assessment_data = extract_json(assessment_result)
     
     return assessment_data
+
+
+######################
+# Add this to the bottom of your quebec_translation.py file, just above the if __name__ == "__main__" block:
+
+# Export the assess_semantic_accuracy function so it's available to import in app.py
+__all__ = ['process_document_for_quebec_french', 'calculate_cosine_similarity', 'assess_semantic_accuracy']
